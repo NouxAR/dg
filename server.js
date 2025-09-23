@@ -6,6 +6,12 @@ import OpenAI from "openai";
 
 const app = express();
 app.use(bodyParser.json());
+
+// static klasörü yoksa oluştur
+if (!fs.existsSync("static")) {
+  fs.mkdirSync("static");
+}
+
 app.use("/static", express.static("static")); // ses dosyaları buradan serve edilecek
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
