@@ -30,16 +30,6 @@ app.post("/api/tts", async (req, res) => {
 
     const buffer = Buffer.from(await response.arrayBuffer());
     fs.writeFileSync(ttsPath, buffer);
-
-    // 2. RVC modeliyle dönüştür (örnek: infer-rvc.py)
-    await new Promise((resolve, reject) => {
-      exec(
-        `python3 infer-rvc.py --input ${ttsPath} --output ${outPath} --model goggins_rvc.pth`,
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
     });
 
     // 3. MP3’e çevir
