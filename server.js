@@ -1,86 +1,64 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const mongoose = require('mongoose');
+import express from "express";
+import bodyParser from "body-parser";
+import fs from "fs";
+import path from "path";
+import { exec } from "child_process";
+import OpenAI from "openai";
 
 const app = express();
-const port = process.env.PORT || 3000;
+app.use(bodyParser.json());
+app.use("/static", express.static("static")); // ses dosyaları buradan serve edilecek
 
-const dialogSchema = new mongoose.Schema({
-    scene: String,
-    character: String,
-    type: String,
-    line: String,
-    choices: [String],
-    order: Number
-}, { collection: 'Dialogs' }); // 👈 BU KISIM ÇOK KRİTİK
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const Dialog = mongoose.model("Dialog", dialogSchema);
+// --- TTS Endpoint ---
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "text is required" });
 
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+    const ttsPath = `temp_${Date.now()}.wav`;
+    const outPath = `out_${Date.now()}.wav`;
+    const mp3Path = `static/out_${Date.now()}.mp3`;
 
-// MongoDB bağlantısı
-mongoose.connect('mongodb://mongo:NtZAjdaGTkOGLqVvsutdiAEHIRnxhFie@mongodb.railway.internal:27017', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-}).then(() => console.log("✅ MongoDB bağlantısı başarılı!"))
-    .catch(err => console.error("❌ MongoDB bağlantı hatası:", err));
+    // 1. OpenAI TTS ile ses üret
+    const response = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: "alloy",
+      input: text,
+    });
 
-// Şema & Model
-const choiceSchema = new mongoose.Schema({
-    key: String,
-    value: String,
-    createdAt: { type: Date, default: Date.now }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(ttsPath, buffer);
+
+    // 2. RVC modeliyle dönüştür (örnek: infer-rvc.py)
+    await new Promise((resolve, reject) => {
+      exec(
+        `python3 infer-rvc.py --input ${ttsPath} --output ${outPath} --model goggins_rvc.pth`,
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    // 3. MP3’e çevir
+    await new Promise((resolve, reject) => {
+      exec(`ffmpeg -y -i ${outPath} ${mp3Path}`, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    res.json({
+      audioUrl: `https://${process.env.RAILWAY_STATIC_URL}/static/${path.basename(mp3Path)}`
+    });
+  } catch (err) {
+    console.error("TTS error:", err);
+    res.status(500).json({ error: "TTS failed" });
+  }
 });
 
-const Choice = mongoose.model('Choice', choiceSchema);
-
-// API endpoint
-app.post('/api/save', async (req, res) => {
-    const { key, value } = req.body;
-
-    console.log("📥 Gelen istek:", req.body);  // Bu satır logda görünmeli!
-
-    if (!key || !value) {
-        console.log("❌ Eksik veri:", req.body);
-        return res.status(400).send('Eksik veri');
-    }
-
-    try {
-        const newChoice = new Choice({ key, value });
-        await newChoice.save();
-        console.log("✅ Kaydedildi:", key, value); // Loga düşmeli
-        res.status(200).send('Veri MongoDB’ye kaydedildi.');
-    } catch (err) {
-        console.error("❌ HATA:", err);
-        res.status(500).send('MongoDB kayıt hatası');
-    }
-});
-app.listen(port, () => {
-    console.log(`🚀 Sunucu çalışıyor: http://localhost:${port}`);
-});
-
-app.get('/api/last3', async (req, res) => {
-    try {
-        const lastChoices = await Choice.find().sort({ createdAt: -1 }).limit(3);
-        res.json(lastChoices);
-    } catch (err) {
-        console.error("Son 3 seçim çekilemedi:", err);
-        res.status(500).send("MongoDB'den veri alınamadı");
-    }
-});
-
-app.get('/api/dialog/:scene', async (req, res) => {
-    try {
-        const sceneName = req.params.scene;
-
-        const dialogs = await Dialog.find({ scene: sceneName }).sort({ order: 1 });
-
-        res.json(dialogs);
-    } catch (err) {
-        console.error("❌ Diyalog çekme hatası:", err);
-        res.status(500).send("MongoDB'den diyalog alınamadı.");
-    }
+app.listen(process.env.PORT || 5000, () => {
+  console.log("Server running...");
 });
