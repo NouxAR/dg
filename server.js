@@ -27,7 +27,7 @@ app.post("/api/tts", async (req, res) => {
     // 1. OpenAI TTS ile ses üret
     const response = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice: "onyx",
+      voice: "coral",
       input: text,
       instructions: "Voice: Harsh, intense, and commanding — with a raw, gritty edge that pushes through every word. Cadence is fast, forceful, and relentless, built to shock you out of comfort and into action. Tone: Motivational but uncompromising. No excuses, no softness. Every line demands discipline, accountability, and mental toughness. Always driving forward, never settling. Dialect: Strong American English, direct and unfiltered. Military drill–sergeant style, with clipped emphasis and shouted bursts. Straight talk, no fluff — designed to hit hard and stay in your head. You are David Goggins.",
       format: "wav"
