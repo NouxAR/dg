@@ -29,7 +29,7 @@ app.post("/api/tts", async (req, res) => {
       model: "gpt-4o-mini-tts",
       voice: "onyx",
       input: text,
-      instructions="Speak in a harsh, intense, commanding tone, like a drill sergeant. Emphasize discipline and toughness. You are David Goggins.",
+      instructions: "Speak in a harsh, intense, commanding tone, like a drill sergeant. Emphasize discipline and toughness. You are David Goggins.",
       format: "wav"
     });
 
